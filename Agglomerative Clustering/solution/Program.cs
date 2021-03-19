@@ -62,6 +62,7 @@ class Solution
                 {
                     double dist = GetEuclidianDistance(_pnts[i], _pnts[j]);
                     _distancePair.Add($"{_pnts[i].Sequence}<->{_pnts[j].Sequence}",dist);
+                    _distancePair.Add($"{_pnts[j].Sequence}<->{_pnts[i].Sequence}",dist);
                 }
             }
         }
@@ -115,7 +116,7 @@ class Solution
 
     class ClusterHandler
     {
-        public List<Cluster> _cluster = new List<Cluster>();
+        public List<Cluster> Clusters = new List<Cluster>();
         private static int clusterid;
         public int _targetClusters = 0;
         public SIMILARITYMEASURE _similaritymeasure=SIMILARITYMEASURE.SINGLE;        
@@ -131,11 +132,23 @@ class Solution
             foreach(Point _p in ClusterHelper._points)
             {
                 Cluster c = new Cluster(getNextClusterID(),_p);
-                _cluster.Add(c);
+                Clusters.Add(c);
             }
         }
 
-        public Tuple<string,string,double> RunSingleLinkCluster(Cluster[] c)
+
+        public Tuple<string,string,double> RunCluster(Cluster[] c)
+        {
+            if(_similaritymeasure == SIMILARITYMEASURE.SINGLE)
+                return RunSingleLinkCluster(c);
+            else if(_similaritymeasure == SIMILARITYMEASURE.COMPLETE)
+                return RunCompleteLinkCluster(c);    
+            else
+                return RunAverageLinkCluster(c);                            
+        }
+
+
+        private Tuple<string,string,double> RunSingleLinkCluster(Cluster[] c)
         {
             Dictionary<string,double> clusterDistance = new Dictionary<string, double>();
             for(int i=0; i<c.Length-1;i++)
@@ -156,19 +169,19 @@ class Solution
             return Tuple.Create(id1,id2,minVal);
         }
 
-        public Tuple<string,string,double> RunCompleteLinkCluster(Cluster[] c)
+        private Tuple<string,string,double> RunCompleteLinkCluster(Cluster[] c)
         {
             Dictionary<string,double> clusterDistance = new Dictionary<string, double>();
             for(int i=0; i<c.Length-1;i++)
             {
                 for(int j=i+1; j<c.Length; j++)
                 {
-                    var dist = GetMinClusterDistance(c[i], c[j]);
+                    var dist = GetMaxClusterDistance(c[i], c[j]);
                     clusterDistance.Add($"{c[i]._clusterid}<->{c[j]._clusterid}",dist);
                 }
             }
 
-            var maxVal = clusterDistance.Values.Max();
+            var maxVal = clusterDistance.Values.Min();
             var closestCluster = clusterDistance.Where(x=>x.Value==maxVal).First().Key;
             
             var id1 = closestCluster.Split("<->")[0];
@@ -177,23 +190,32 @@ class Solution
             return Tuple.Create(id1,id2,maxVal);            
         }        
 
-        public void AddPointToClusterByID(Point p, int clusterID)
-        {
-            Cluster c = _cluster.Where(x=>x._clusterid == clusterID).First();
-            c._points.Add(p);
-            p.ClusterID=c._clusterid;
-            _cluster.Add(c);
-        }
-        public void AddPointsToClusterByID(Point[] p, int clusterID)
-        {
-            Cluster c = _cluster.Where(x=>x._clusterid == clusterID).First();
-            c._points.AddRange(p);
 
-            foreach(var _p in p)
-                _p.ClusterID=c._clusterid;
+        private Tuple<string,string,double> RunAverageLinkCluster(Cluster[] c)
+        {
+            Dictionary<string,double> clusterDistance = new Dictionary<string, double>();
+            for(int i=0; i<c.Length-1;i++)
+            {
+                for(int j=i+1; j<c.Length; j++)
+                {
+                    var dist = GetMeanClusterDistance(c[i], c[j]);
+                    clusterDistance.Add($"{c[i]._clusterid}<->{c[j]._clusterid}",dist);
+                }
+            }
+
+            var minOfMean = clusterDistance.Values.Min();
+            var closestCluster = clusterDistance.Where(x=>x.Value==minOfMean).First().Key;
             
-            _cluster.Add(c);
-        }
+            var id1 = closestCluster.Split("<->")[0];
+            var id2 = closestCluster.Split("<->")[1];
+
+            return Tuple.Create(id1,id2,minOfMean);            
+        }   
+
+
+
+
+
 
         public Cluster MergeCluster(Cluster c1, Cluster c2)
         {
@@ -205,17 +227,32 @@ class Solution
 
             Cluster c = new Cluster(getNextClusterID(),p);
 
-            foreach(var _p in p)
-                _p.ClusterID=c._clusterid;
+             foreach(var _p in p)
+                 _p.ClusterID=c._clusterid;
+
+            Clusters.Add(c);
+            DeleteCluster(c1._clusterid);
+            DeleteCluster(c2._clusterid);
 
             return c;
         }
 
+        public Cluster CreateCluster(Point[] p)
+        {
+            Cluster c = new Cluster(getNextClusterID(), p);
+            return c;
+        }
         public void DeleteCluster(int id)
         {
-            var c = _cluster.Where(x=>x._clusterid==id).First();
-            _cluster.Remove(c);
+            var c = Clusters.Where(x=>x._clusterid==id).First();
+            Clusters.Remove(c);
         } 
+
+        public Cluster FindClusterByID(int id)
+        {
+            var c = Clusters.Where(x=>x._clusterid==id).First();
+            return c;
+        }
 
         public double GetMinClusterDistance(Cluster a, Cluster b)
         {
@@ -282,21 +319,29 @@ class Solution
         /* Enter your code here. Read input from STDIN. Print output to STDOUT. Your class should be named Solution */
         
         ClusterHandler ch = new ClusterHandler();
-        ch.InitializeCluster("small2single.txt");
+        //ch.InitializeCluster("small2single.txt");
+        ch.InitializeCluster("small2complete.txt");
+        //ch.InitializeCluster("small2average.txt");
+        //ch.InitializeCluster("big5single.txt");
 
+        while(ch.Clusters.Count>ch._targetClusters)
+        {
+            var allClusters = ch.Clusters.ToArray();
 
+            Tuple<string,string,double> result = ch.RunCluster(allClusters);
 
+            var cid1 = Convert.ToInt32(result.Item1);
+            var cid2 = Convert.ToInt32(result.Item2);
 
-        
-        var d2 = ClusterHelper._distancePair;
-        
-        Console.WriteLine("yo");
+            var c1 = ch.FindClusterByID(cid1);
+            var c2 = ch.FindClusterByID(cid2);
 
+            var newCluster = ch.MergeCluster(c1,c2);
+        }
 
+        var points = ClusterHelper._points.OrderBy(x=>x.Sequence).ToList();
 
-
-
-
-
+        foreach(Point p in points)
+            Console.WriteLine($"{p.Sequence} ==> {p.ClusterID}");
     }
 }
