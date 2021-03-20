@@ -17,6 +17,33 @@ class Solution
         public static SIMILARITYMEASURE _similaritymeasure = SIMILARITYMEASURE.SINGLE;
         public static Dictionary<string, double> _distancePair = new Dictionary<string,double>();
 
+        public static void LoadPointsFromStdIn(string stdin)
+        {
+            var lines = stdin.Split('\n');
+            int lineNum = -1;
+            foreach(var line in lines)
+            {
+                if(lineNum==-1)
+                {
+                    var header = line.Split(' ');
+
+                    _recCount = Convert.ToInt32(header[0]);
+                    _numberOfCluster = Convert.ToInt32(header[1]);
+                    _similaritymeasure = (SIMILARITYMEASURE) Enum.Parse(typeof(SIMILARITYMEASURE) ,header[2]);
+
+                    lineNum++;
+                }
+                else
+                {
+                    double lat = Convert.ToDouble(line.Split(' ')[0]);
+                    double lon = Convert.ToDouble(line.Split(' ')[1]);
+
+                    _points.Add(new Point(lat,lon, lineNum++));
+                }
+            }
+        }
+        
+        
         public static void LoadPointsFromFile(string file)
         {
             var lines = File.ReadAllLines($"{path}{file}");
@@ -61,8 +88,8 @@ class Solution
                 for(int j=i+1; j<items; j++)
                 {
                     double dist = GetEuclidianDistance(_pnts[i], _pnts[j]);
-                    _distancePair.Add($"{_pnts[i].Sequence}<->{_pnts[j].Sequence}",dist);
-                    _distancePair.Add($"{_pnts[j].Sequence}<->{_pnts[i].Sequence}",dist);
+                    _distancePair.Add($"{_pnts[i].Sequence}#{_pnts[j].Sequence}",dist);
+                    _distancePair.Add($"{_pnts[j].Sequence}#{_pnts[i].Sequence}",dist);
                 }
             }
         }
@@ -121,6 +148,21 @@ class Solution
         public int _targetClusters = 0;
         public SIMILARITYMEASURE _similaritymeasure=SIMILARITYMEASURE.SINGLE;        
 
+        public void InitializeClusterByStdIn(string stdin)
+        {
+            ClusterHelper.LoadPointsFromStdIn(stdin);
+            ClusterHelper.ComputeDistanceBetweenEachPair();
+
+            _targetClusters = ClusterHelper._numberOfCluster;
+            _similaritymeasure = ClusterHelper._similaritymeasure;
+
+            foreach(Point _p in ClusterHelper._points)
+            {
+                Cluster c = new Cluster(getNextClusterID(),_p);
+                Clusters.Add(c);
+            }
+        }
+        
         public void InitializeCluster(string sampleFileName)
         {
             ClusterHelper.LoadPointsFromFile(sampleFileName);
@@ -156,15 +198,15 @@ class Solution
                 for(int j=i+1; j<c.Length; j++)
                 {
                     var dist = GetMinClusterDistance(c[i], c[j]);
-                    clusterDistance.Add($"{c[i]._clusterid}<->{c[j]._clusterid}",dist);
+                    clusterDistance.Add($"{c[i]._clusterid}#{c[j]._clusterid}",dist);
                 }
             }
 
             var minVal = clusterDistance.Values.Min();
             var closestCluster = clusterDistance.Where(x=>x.Value==minVal).First().Key;
             
-            var id1 = closestCluster.Split("<->")[0];
-            var id2 = closestCluster.Split("<->")[1];
+            var id1 = closestCluster.Split('#')[0];
+            var id2 = closestCluster.Split('#')[1];
 
             return Tuple.Create(id1,id2,minVal);
         }
@@ -177,17 +219,17 @@ class Solution
                 for(int j=i+1; j<c.Length; j++)
                 {
                     var dist = GetMaxClusterDistance(c[i], c[j]);
-                    clusterDistance.Add($"{c[i]._clusterid}<->{c[j]._clusterid}",dist);
+                    clusterDistance.Add($"{c[i]._clusterid}#{c[j]._clusterid}",dist);
                 }
             }
 
             var maxVal = clusterDistance.Values.Min();
             var closestCluster = clusterDistance.Where(x=>x.Value==maxVal).First().Key;
             
-            var id1 = closestCluster.Split("<->")[0];
-            var id2 = closestCluster.Split("<->")[1];
+            var id1 = closestCluster.Split('#')[0];
+            var id2 = closestCluster.Split('#')[1];
 
-            return Tuple.Create(id1,id2,maxVal);            
+            return Tuple.Create<string,string,double>(id1,id2,maxVal);            
         }        
 
 
@@ -199,23 +241,18 @@ class Solution
                 for(int j=i+1; j<c.Length; j++)
                 {
                     var dist = GetMeanClusterDistance(c[i], c[j]);
-                    clusterDistance.Add($"{c[i]._clusterid}<->{c[j]._clusterid}",dist);
+                    clusterDistance.Add($"{c[i]._clusterid}#{c[j]._clusterid}",dist);
                 }
             }
 
             var minOfMean = clusterDistance.Values.Min();
             var closestCluster = clusterDistance.Where(x=>x.Value==minOfMean).First().Key;
             
-            var id1 = closestCluster.Split("<->")[0];
-            var id2 = closestCluster.Split("<->")[1];
+            var id1 = closestCluster.Split('#')[0];
+            var id2 = closestCluster.Split('#')[1];
 
-            return Tuple.Create(id1,id2,minOfMean);            
+            return Tuple.Create<string,string,double>(id1,id2,minOfMean);            
         }   
-
-
-
-
-
 
         public Cluster MergeCluster(Cluster c1, Cluster c2)
         {
@@ -262,7 +299,7 @@ class Solution
             {
                 foreach(Point bw in b._points)
                 {
-                    string key = $"{av.Sequence}<->{bw.Sequence}";
+                    string key = $"{av.Sequence}#{bw.Sequence}";
                     var d = ClusterHelper._distancePair[key];
 
                     interDistance.Add(d);
@@ -280,7 +317,7 @@ class Solution
             {
                 foreach(Point bw in b._points)
                 {
-                    string key = $"{av.Sequence}<->{bw.Sequence}";
+                    string key = $"{av.Sequence}#{bw.Sequence}";
                     var d = ClusterHelper._distancePair[key];
 
                     interDistance.Add(d);
@@ -298,7 +335,7 @@ class Solution
             {
                 foreach(Point bw in b._points)
                 {
-                    string key = $"{av.Sequence}<->{bw.Sequence}";
+                    string key = $"{av.Sequence}#{bw.Sequence}";
                     var d = ClusterHelper._distancePair[key];
 
                     interDistance.Add(d);
@@ -314,15 +351,27 @@ class Solution
         }
     }
 
-
     static void Main(String[] args) {
         /* Enter your code here. Read input from STDIN. Print output to STDOUT. Your class should be named Solution */
         
+         string stdin = null;
+         if (Console.IsInputRedirected)
+         {
+             using (StreamReader reader = new StreamReader(Console.OpenStandardInput(), Console.InputEncoding))
+             {
+                 stdin = reader.ReadToEnd();
+             }
+         }        
+
         ClusterHandler ch = new ClusterHandler();
         //ch.InitializeCluster("small2single.txt");
-        ch.InitializeCluster("small2complete.txt");
+        //ch.InitializeCluster("small2complete.txt");
         //ch.InitializeCluster("small2average.txt");
         //ch.InitializeCluster("big5single.txt");
+        //ch.InitializeCluster("big5complete.txt");
+        //ch.InitializeCluster("big5single.txt");
+        ch.InitializeClusterByStdIn(stdin);
+
 
         while(ch.Clusters.Count>ch._targetClusters)
         {
@@ -341,7 +390,9 @@ class Solution
 
         var points = ClusterHelper._points.OrderBy(x=>x.Sequence).ToList();
 
+
+
         foreach(Point p in points)
-            Console.WriteLine($"{p.Sequence} ==> {p.ClusterID}");
+            Console.WriteLine($"{p.ClusterID}");
     }
 }
